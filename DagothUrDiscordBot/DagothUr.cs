@@ -10,8 +10,6 @@ class DagothUr
 
     static void Main(String[] args)
     {
-        // Load appsettings.json
-        AppSettings.AppSettings.LoadAppSettingsFile();
 
         new DagothUr()
             .MainAsync()
@@ -38,7 +36,8 @@ class DagothUr
 
     public async Task MainAsync()
     {
-        await client.LoginAsync(TokenType.Bot, AppSettings.AppSettings.GetAppSetting("token"));
+        string discordBotToken = Environment.GetEnvironmentVariable("token") ?? string.Empty;
+        await client.LoginAsync(TokenType.Bot, discordBotToken);
 
         // Starts the connection. Returns after one is established and runs the connection on another thread
         await client.StartAsync();

@@ -24,7 +24,7 @@ namespace DagothUrDiscordBot.CommandManager
             getStatsCommand.WithName("get-stats");
             getStatsCommand.WithDescription("Fetches the stats for the GIM bois");
 
-            string testGuildID = AppSettings.AppSettings.GetAppSetting("testGuildID")!;
+            string testGuildID = Environment.GetEnvironmentVariable("testGuildID") ?? string.Empty;
 
             if (testGuildID != "")
             {
@@ -55,7 +55,7 @@ namespace DagothUrDiscordBot.CommandManager
 
         private async Task<string> GetStatsCommand()
         {
-            StatFetcher.StatFetcher statFetcher = new(AppSettings.AppSettings.GetAppSetting("gimName")!);
+            StatFetcher.StatFetcher statFetcher = new(Environment.GetEnvironmentVariable("gimName") ?? string.Empty);
             string taskResult = await statFetcher.GetGroupStats();
             return taskResult;
         }
