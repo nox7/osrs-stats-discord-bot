@@ -13,8 +13,6 @@ class DagothUr
         // Load appsettings.json
         AppSettings.AppSettings.LoadAppSettingsFile();
 
-        
-
         new DagothUr()
             .MainAsync()
             .GetAwaiter()

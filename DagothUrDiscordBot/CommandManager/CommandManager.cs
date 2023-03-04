@@ -40,7 +40,24 @@ namespace DagothUrDiscordBot.CommandManager
 
         private async Task SlashCommandHandler(SocketSlashCommand command)
         {
-            await command.RespondAsync($"You executed {command.Data.Name}");
+            Console.WriteLine($"Command '{command.Data.Name}' used.");
+            if (command.Data.Name == "get-stats")
+            {
+                await command.DeferAsync();
+                string groupStatsMessage = await GetStatsCommand();
+                await command.FollowupAsync(groupStatsMessage);
+            }
+            else
+            {
+                await command.RespondAsync("Unknown command.");
+            }
+        }
+
+        private async Task<string> GetStatsCommand()
+        {
+            StatFetcher.StatFetcher statFetcher = new(AppSettings.AppSettings.GetAppSetting("gimName")!);
+            string taskResult = await statFetcher.GetGroupStats();
+            return taskResult;
         }
     }
 }
