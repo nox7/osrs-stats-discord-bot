@@ -24,10 +24,12 @@ namespace DagothUrDiscordBot.CommandManager
             getStatsCommand.WithName("get-stats");
             getStatsCommand.WithDescription("Fetches the stats for the GIM bois");
 
-            if (Environment.GetEnvironmentVariable("testGuildID") != null)
+            string testGuildID = AppSettings.AppSettings.GetAppSetting("testGuildID")!;
+
+            if (testGuildID != "")
             {
-                System.Console.WriteLine("testGuildID is defined. Registering slash commands to a specific guild.");
-                SocketGuild guild = client.GetGuild(Convert.ToUInt64(Environment.GetEnvironmentVariable("testGuildID")));
+                System.Console.WriteLine($"testGuildID is defined ({testGuildID}). Registering slash commands to a specific guild.");
+                SocketGuild guild = client.GetGuild(Convert.ToUInt64(testGuildID));
                 await guild.CreateApplicationCommandAsync(getStatsCommand.Build());
             }
             else
