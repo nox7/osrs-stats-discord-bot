@@ -35,6 +35,7 @@ namespace DagothUrDiscordBot.CommandManager
             else
             {
                 System.Console.WriteLine("testGuildID is null. Registering slash commands to be GLOBAL.");
+                await client.CreateGlobalApplicationCommandAsync(getStatsCommand.Build());
             }
         }
 
