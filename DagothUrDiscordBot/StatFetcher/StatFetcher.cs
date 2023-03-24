@@ -26,7 +26,7 @@ namespace DagothUrDiscordBot.StatFetcher
 
         public async Task<string> GetGroupStats()
         {
-            string hiscoresHTML = await GetGroupIronManHiscoreHTML(this.groupName);
+            string hiscoresHTML = await GetGroupIronManHiscoreHTML();
             List<Player> players = ParsePlayersAndStatsFromHiScoresResponseBody(hiscoresHTML);
             string discordMessageToReturn = "";
             discordMessageToReturn += new string('=', 30) + "\n";
@@ -42,7 +42,7 @@ namespace DagothUrDiscordBot.StatFetcher
             return discordMessageToReturn;
         }
 
-        private async Task<string> GetGroupIronManHiscoreHTML(string groupName)
+        public async Task<string> GetGroupIronManHiscoreHTML()
         {
             HttpClientHandler handler = new HttpClientHandler
             {
@@ -54,7 +54,7 @@ namespace DagothUrDiscordBot.StatFetcher
                 BaseAddress = new Uri(GROUP_IRONMAN_BASE_URL)
             };
 
-            using HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, $"?name={Uri.EscapeDataString(groupName)}");
+            using HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, $"?name={Uri.EscapeDataString(this.groupName)}");
 
             using HttpResponseMessage response = await client.SendAsync( request );
             // response.EnsureSuccessStatusCode();
@@ -63,7 +63,7 @@ namespace DagothUrDiscordBot.StatFetcher
             return responseBody;
         }
 
-        private List<Player> ParsePlayersAndStatsFromHiScoresResponseBody(string responseBody)
+        public List<Player> ParsePlayersAndStatsFromHiScoresResponseBody(string responseBody)
         {
             HtmlParser parser = new HtmlParser();
             IHtmlDocument document = parser.ParseDocument( responseBody );

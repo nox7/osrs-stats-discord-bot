@@ -26,6 +26,11 @@ namespace DagothUrDiscordBot.StatFetcher
             return this.totalLevel;
         }
 
+        public string GetName()
+        {
+            return this.name;
+        }
+
         public string ToStringForDiscordWithoutSkills()
         {
             return $"**{this.name}**\n-- Total level: {this.totalLevel:n0}\n-- Total XP: {this.totalXP:n0}";
