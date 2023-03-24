@@ -1,4 +1,5 @@
-﻿using Discord;
+﻿using DagothUrDiscordBot.Models;
+using Discord;
 using Discord.WebSocket;
 
 namespace DagothUrDiscordBot;
@@ -7,18 +8,23 @@ class DagothUr
 {
     private readonly DiscordSocketClient client;
     private CommandManager.CommandManager commandManager;
+    private DagothUrContext database;
 
     static void Main(String[] args)
     {
 
-        new DagothUr()
-            .MainAsync()
-            .GetAwaiter()
-            .GetResult();
+        using (DagothUrContext database = new DagothUrContext())
+        {
+            new DagothUr(database)
+                .MainAsync()
+                .GetAwaiter()
+                .GetResult();
+        }
     }
 
-    public DagothUr()
+    public DagothUr(DagothUrContext database)
     {
+        this.database = database;
         // Load app settings
         // Setup the privileges
         DiscordSocketConfig config = new DiscordSocketConfig
@@ -31,7 +37,8 @@ class DagothUr
         client.Log += OnLog;
         client.Ready += OnReady;
 
-        commandManager = new CommandManager.CommandManager(client);
+        commandManager = new CommandManager.CommandManager(client, database);
+        this.database = database;
     }
 
     public async Task MainAsync()
