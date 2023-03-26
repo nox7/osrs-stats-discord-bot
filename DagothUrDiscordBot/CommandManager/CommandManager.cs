@@ -14,24 +14,27 @@ namespace DagothUrDiscordBot.CommandManager
     internal class CommandManager
     {
         private DiscordSocketClient client;
-        private DagothUrContext database;
 
-        public CommandManager(DiscordSocketClient client, DagothUrContext database) {
+        public CommandManager(DiscordSocketClient client) {
             this.client = client;
-            this.database = database;
 
             client.SlashCommandExecuted += SlashCommandHandler;
         }
 
         public async Task RegisterCommands()
         {
+            SlashCommandBuilder setGimNameCommand = new SlashCommandBuilder();
+            setGimNameCommand.WithName("set-gim-name");
+            setGimNameCommand.WithDescription("Sets the group ironman name for the current Discord server");
+            setGimNameCommand.AddOption("group-name", ApplicationCommandOptionType.String, "The name of the ironman group you want this bot to monitor in this server.", isRequired: true);
+
             SlashCommandBuilder getStatsCommand = new SlashCommandBuilder();
             getStatsCommand.WithName("get-stats");
             getStatsCommand.WithDescription("Fetches the stats for the GIM bois");
 
-            SlashCommandBuilder loadPlayersIntoDB = new SlashCommandBuilder();
-            getStatsCommand.WithName("load-players-into-db");
-            getStatsCommand.WithDescription("Loads the Group Ironman players into the bot's database, if they are not already there.");
+            SlashCommandBuilder setDefaultChatChannelCommand = new SlashCommandBuilder();
+            setDefaultChatChannelCommand.WithName("set-default-chat-channel");
+            setDefaultChatChannelCommand.WithDescription("Sets the default channel the bot will send unprompted updates to.");
 
             string testGuildID = Environment.GetEnvironmentVariable("testGuildID") ?? string.Empty;
 
@@ -40,28 +43,80 @@ namespace DagothUrDiscordBot.CommandManager
                 System.Console.WriteLine($"testGuildID is defined ({testGuildID}). Registering slash commands to a specific guild.");
                 SocketGuild guild = client.GetGuild(Convert.ToUInt64(testGuildID));
                 await guild.CreateApplicationCommandAsync(getStatsCommand.Build());
+                await guild.CreateApplicationCommandAsync(setGimNameCommand.Build());
+                await guild.CreateApplicationCommandAsync(setDefaultChatChannelCommand.Build());
             }
             else
             {
                 System.Console.WriteLine("testGuildID is null. Registering slash commands to be GLOBAL.");
                 await client.CreateGlobalApplicationCommandAsync(getStatsCommand.Build());
+                await client.CreateGlobalApplicationCommandAsync(setGimNameCommand.Build());
+                await client.CreateGlobalApplicationCommandAsync(setDefaultChatChannelCommand.Build());
             }
         }
 
         private async Task SlashCommandHandler(SocketSlashCommand command)
         {
             Console.WriteLine($"Command '{command.Data.Name}' used.");
+            ulong? guildID = command.GuildId;
+
             if (command.Data.Name == "get-stats")
             {
                 await command.DeferAsync();
-                string groupStatsMessage = await GetStatsCommand();
-                await command.FollowupAsync(groupStatsMessage);
+                try
+                {
+                    string groupStatsMessage = await GetStatsCommand(guildID ?? 0);
+                    await command.FollowupAsync(groupStatsMessage);
+                }
+                catch (HttpRequestException)
+                {
+                    await command.FollowupAsync("There was an HTTP error looking up the stats. Is the group name spelled correctly?");
+                }
             }
-            else if (command.Data.Name == "load-players-into-db")
+            else if (command.Data.Name == "set-gim-name")
             {
-                await command.DeferAsync();
-                string responseMessage = await LoadPlayersIntoDB();
-                await command.FollowupAsync(responseMessage);
+                if (guildID != null)
+                {
+                    string gimName = command.Data.Options.First().Value.ToString() ?? "";
+                    if (string.IsNullOrWhiteSpace(gimName)){
+                        await command.RespondAsync("Your group name cannot be empty.");
+                    }
+                    else
+                    {
+                        // Try to lookup this GIM and synchronize the players into the DB
+                        Console.WriteLine($"Receiving GIM Name {gimName}. Attempting to lookup and synchronize players.");
+                        PlayerSynchronizer synchronizer = DagothUr.GetInstance().GetPlayerSynchronizer();
+                        try
+                        {
+                            await command.DeferAsync();
+                            await synchronizer.SynchronizePlayersIntoDatabase(gimName);
+                            await command.FollowupAsync($"Set this server's monitored GIM to: {gimName}.");
+                            DagothUr.GetInstance().SetGuildGroupIronmanName(guildID ?? 0, gimName);
+                        }
+                        catch (HttpRequestException)
+                        {
+                            await command.RespondAsync($"Failed to lookup stats and confirm the existence for the group: {gimName}. Did you spell it right?");
+                            return;
+                        }
+                    }
+                }
+                else
+                {
+                    await command.RespondAsync("This command is only valid when used in a guild.");
+                }
+            }
+            else if (command.Data.Name == "set-default-chat-channel")
+            {
+                ulong? channelID = command.ChannelId;
+                if (guildID != null && channelID != null)
+                {
+                    DagothUr.GetInstance().SetGuildDefaultChatChannel(guildID ?? 0, channelID ?? 0);
+                    await command.RespondAsync("Set this channel as the default channel for unprompted chats and level up messages.");
+                }
+                else
+                {
+                    await command.RespondAsync("This command is only valid when used in a guild and channel.");
+                }
             }
             else
             {
@@ -69,20 +124,19 @@ namespace DagothUrDiscordBot.CommandManager
             }
         }
 
-        private async Task<string> GetStatsCommand()
+        private async Task<string> GetStatsCommand(ulong guildID)
         {
-            StatFetcher.StatFetcher statFetcher = new(
-                Environment.GetEnvironmentVariable("gimName") ?? string.Empty
-            );
-            string taskResult = await statFetcher.GetGroupStats();
-            return taskResult;
-        }
-
-        private async Task<string> LoadPlayersIntoDB()
-        {
-            var synchronizer = new PlayerSkillSynchronizer(this.database);
-            await synchronizer.SynchronizePlayersIntoDatabase();
-            return "Loaded.";
+            string? gimName = DagothUr.GetInstance().GetGuildGroupIronmanName(guildID);
+            if (gimName != null)
+            {
+                StatFetcher.StatFetcher statFetcher = new(gimName);
+                string taskResult = await statFetcher.GetGroupStats();
+                return taskResult;
+            }
+            else
+            {
+                return "You have not yet setup the group ironman name for this server. Run the setup command.";
+            }
         }
     }
 }

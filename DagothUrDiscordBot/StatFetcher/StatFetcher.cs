@@ -27,13 +27,13 @@ namespace DagothUrDiscordBot.StatFetcher
         public async Task<string> GetGroupStats()
         {
             string hiscoresHTML = await GetGroupIronManHiscoreHTML();
-            List<Player> players = ParsePlayersAndStatsFromHiScoresResponseBody(hiscoresHTML);
+            List<HighscoresPlayer> players = ParsePlayersAndStatsFromHiScoresResponseBody(hiscoresHTML);
             string discordMessageToReturn = "";
             discordMessageToReturn += new string('=', 30) + "\n";
             discordMessageToReturn += $"===== Stats for **{this.groupName}** =====\n";
             discordMessageToReturn += new string('=', 30) + "\n\n";
 
-            foreach (Player player in players)
+            foreach (HighscoresPlayer player in players)
             {
                 discordMessageToReturn += new string('-', 25) + "\n";
                 discordMessageToReturn += player.ToStringForDiscordWithoutSkills() + "\n";
@@ -57,18 +57,18 @@ namespace DagothUrDiscordBot.StatFetcher
             using HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, $"?name={Uri.EscapeDataString(this.groupName)}");
 
             using HttpResponseMessage response = await client.SendAsync( request );
-            // response.EnsureSuccessStatusCode();
+            response.EnsureSuccessStatusCode();
 
             string responseBody = await response.Content.ReadAsStringAsync();
             return responseBody;
         }
 
-        public List<Player> ParsePlayersAndStatsFromHiScoresResponseBody(string responseBody)
+        public List<HighscoresPlayer> ParsePlayersAndStatsFromHiScoresResponseBody(string responseBody)
         {
             HtmlParser parser = new HtmlParser();
             IHtmlDocument document = parser.ParseDocument( responseBody );
             IHtmlCollection<IElement> playerRows = document.QuerySelectorAll(".uc-scroll__table-row--type-player");
-            List<Player> players = new List<Player>();
+            List<HighscoresPlayer> players = new List<HighscoresPlayer>();
 
             foreach (IElement element in playerRows)
             {
@@ -104,7 +104,7 @@ namespace DagothUrDiscordBot.StatFetcher
 
                 // Fetch all of the skill rows
                 var skillTableRowElements = document.QuerySelectorAll(".uc-scroll__table-row.uc-scroll__table-row--type-skill");
-                List<PlayerSkill> skills = new List<PlayerSkill>();
+                List<HighscoresPlayerSkill> skills = new List<HighscoresPlayerSkill>();
 
                 foreach (IElement skillTableRow in skillTableRowElements)
                 {
@@ -126,13 +126,13 @@ namespace DagothUrDiscordBot.StatFetcher
                         string skillName = skillNameElement.TextContent;
                         int skillLevel = Int32.Parse(skillLevelElement.TextContent.Replace(",", ""));
                         int skillXP = Int32.Parse(skillXPElement.TextContent.Replace(",", ""));
-                        PlayerSkill playerSkill = new PlayerSkill(skillName, skillLevel, skillXP);
+                        HighscoresPlayerSkill playerSkill = new HighscoresPlayerSkill(skillName, skillLevel, skillXP);
                         skills.Add(playerSkill);
                     }
                 }
 
                 // Create the player object
-                Player player = new Player(playerName, totalLevel, totalXP, skills);
+                HighscoresPlayer player = new HighscoresPlayer(playerName, totalLevel, totalXP, skills);
                 players.Add(player);
             }
 
