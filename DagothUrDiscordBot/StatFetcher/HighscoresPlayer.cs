@@ -1,19 +1,20 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
 
 namespace DagothUrDiscordBot.StatFetcher
 {
-    internal class Player
+    internal class HighscoresPlayer
     {
         private string name;
         private int totalLevel;
         private int totalXP;
-        private List<PlayerSkill> skillList;
+        private List<HighscoresPlayerSkill> skillList;
 
-        public Player(string name, int totalLevel, int totalXP, List<PlayerSkill> skillList)
+        public HighscoresPlayer(string name, int totalLevel, int totalXP, List<HighscoresPlayerSkill> skillList)
         {
             this.name = name;
             this.totalLevel = totalLevel;
@@ -31,9 +32,27 @@ namespace DagothUrDiscordBot.StatFetcher
             return this.name;
         }
 
+        public List<HighscoresPlayerSkill> GetSkillList()
+        {
+            return this.skillList;
+        }
+
         public string ToStringForDiscordWithoutSkills()
         {
             return $"**{this.name}**\n-- Total level: {this.totalLevel:n0}\n-- Total XP: {this.totalXP:n0}";
+        }
+
+        public HighscoresPlayerSkill? GetSkillByName(string name)
+        {
+            foreach (HighscoresPlayerSkill skill in skillList)
+            {
+                if (skill.GetName() == name)
+                {
+                    return skill;
+                }
+            }
+
+            return null;
         }
     }
 }
