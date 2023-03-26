@@ -105,7 +105,7 @@ namespace DagothUrDiscordBot.PlayerSkillMonitor
                 foreach (HighscoresPlayerSkill hsSkill in hsPlayer.GetSkillList())
                 {
                     PlayerSkill? existingSkill = database.PlayerSkills.Where(
-                        playerSkill => playerSkill.SkillName == hsSkill.GetName() && playerSkill.Player.PlayerName == hsSkill.GetName()
+                        playerSkill => playerSkill.SkillName == hsSkill.GetName() && playerSkill.PlayerId == playerID
                     ).FirstOrDefault();
 
                     if (existingSkill != null)
