@@ -172,6 +172,7 @@ namespace DagothUrDiscordBot.PlayerSkillMonitor
             using (DagothUrContext database = new DagothUrContext())
             {
                 database.Add(newDatabaseSkill);
+                database.SaveChanges(true);
             }
 
             return newDatabaseSkill;
