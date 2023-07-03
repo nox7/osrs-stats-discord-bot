@@ -18,7 +18,7 @@ class DagothUr
     private CommandManager commandManager;
     private string _runtimeEnvironment;
     private System.Timers.Timer? _skillChangeCheckTimer = null;
-    private DateTime _lastTimerTick;
+    private DateTime _lastTimerTick = DateTime.Now;
     private int _timerTickIntervalMs = 600000;
 
     static void Main(String[] args)
