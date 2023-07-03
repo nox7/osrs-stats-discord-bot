@@ -1,4 +1,5 @@
 ﻿using Discord;
+using System.Diagnostics;
 
 namespace DagothUrDiscordBot.Commands
 {
@@ -37,11 +38,11 @@ namespace DagothUrDiscordBot.Commands
             }
             else if (secondsDifference < 3600 - 1)
             {
-                return $"{(secondsDifference / 3600):n0} minutes";
+                return $"{(secondsDifference / 60):n0} minutes";
             }
             else
             {
-                return $"{(secondsDifference / (3600 * 60)):n0} hours";
+                return $"{(secondsDifference / (3600)):n0} hours";
             }
         }
     }
