@@ -7,5 +7,6 @@
         public const string RunStatsCheck = "run-stats-check";
         public const string GetTrackedRsns = "get-tracked-rsns";
         public const string SetAsBotChannel = "set-as-bot-channel";
+        public const string RemoveRSN = "remove-rsn";
     }
 }

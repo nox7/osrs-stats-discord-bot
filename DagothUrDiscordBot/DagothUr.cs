@@ -17,7 +17,9 @@ class DagothUr
     private readonly DiscordSocketClient client;
     private CommandManager commandManager;
     private string _runtimeEnvironment;
-    private System.Timers.Timer skillChangeCheckTimer;
+    private System.Timers.Timer? _skillChangeCheckTimer = null;
+    private DateTime _lastTimerTick;
+    private int _timerTickIntervalMs = 10000;
 
     static void Main(String[] args)
     {
@@ -86,6 +88,16 @@ class DagothUr
         return this.GetRuntimeEnvironment().ToLower() == "production";
     }
 
+    public DateTime GetLastTimerTickDateTime()
+    {
+        return this._lastTimerTick;
+    }
+
+    public int GetSkillCheckTimerIntervalInMs()
+    {
+        return this._timerTickIntervalMs;
+    }
+
     /// <summary>
     /// Fetches the default chat channel ID a Discord server has set for the bot to use to post updates in
     /// </summary>
@@ -116,14 +128,13 @@ class DagothUr
         // Setup a timer to recurringly check for player skill gains
         System.Timers.Timer playerSkillChangesTimer = new()
         {
-            //Interval = 60000 * 10, // Every 10 minutes
-            Interval = 10000, // Every 10 seconds
+            Interval = _timerTickIntervalMs,
             AutoReset = false,
             Enabled = true
         };
 
         playerSkillChangesTimer.Elapsed += OnPlayerSkillCheckTimedEvent;
-        skillChangeCheckTimer = playerSkillChangesTimer;
+        _skillChangeCheckTimer = playerSkillChangesTimer;
 
         // Block the program from closing until it is closed manually
         await Task.Delay(Timeout.Infinite);
@@ -131,8 +142,8 @@ class DagothUr
 
     private async void OnPlayerSkillCheckTimedEvent(Object? source, System.Timers.ElapsedEventArgs e)
     {
+        this._lastTimerTick = DateTime.Now;
         Console.WriteLine("Skill check timer ticked.");
-        var changeTracker = new ChangeTracker();
         var statFetcher = new StatFetcher();
 
         // Fetch all servers that have given a default chat channel
@@ -145,11 +156,10 @@ class DagothUr
             while(true)
             {
                 List<Player> trackedPlayers = dbContext.Players.Skip((currentPage - 1) * limit).Take(limit).ToList();
-                Console.WriteLine(trackedPlayers.Count);
 
                 if (trackedPlayers.Count == 0)
                 {
-                    Console.WriteLine($"Done reading tracked players in timer on page {currentPage}");
+                    Debug.WriteLine($"Done reading tracked players in timer on page {currentPage}");
                     // Break when the list is empty
                     break;
                 }
@@ -174,7 +184,7 @@ class DagothUr
                             changedPlayer.player = dbPlayer;
                             changedPlayer.changedSkills = changedSkills;
 
-                            string textForGuild = changeTracker.FormatListOfChangedPlayersAsText(new List<ChangedPlayer> { changedPlayer });
+                            var embedForChangedPlayer = changedPlayer.GetDiscordEmbedRepresentingChanges();
 
                             // Update their stats in the DB
                             dbPlayer.UpdateSkills(hsPlayer.GetSkillList());
@@ -192,7 +202,7 @@ class DagothUr
                                 if (channelId != null)
                                 {
                                     SocketTextChannel textChannel = guild.GetTextChannel((ulong)channelId);
-                                    RestUserMessage responseMessage = await textChannel.SendMessageAsync(textForGuild);
+                                    RestUserMessage responseMessage = await textChannel.SendMessageAsync(embed: embedForChangedPlayer);
                                     Debug.WriteLine($"Message sent for {guildId} and {channelId}.");
                                 }
                                 else
@@ -220,7 +230,7 @@ class DagothUr
         }
 
         // After all done, start the timer again
-        skillChangeCheckTimer.Start();
+        _skillChangeCheckTimer.Start();
     }
 
     private Task OnLog(LogMessage log)

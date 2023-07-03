@@ -3,6 +3,7 @@ using DagothUrDiscordBot.OldschoolHiscores;
 using DagothUrDiscordBot.OldSchoolHiscores;
 using Discord;
 using Discord.WebSocket;
+using System;
 using System.Diagnostics;
 
 namespace DagothUrDiscordBot.Commands
@@ -21,12 +22,17 @@ namespace DagothUrDiscordBot.Commands
         public async Task RegisterCommands()
         {
 
-            List<SlashCommandBuilder> slashCommandBuilders = new();
+            List<ApplicationCommandProperties> slashCommandBuilders = new();
 
             SlashCommandBuilder statWatchCommand = new SlashCommandBuilder();
             statWatchCommand.WithName(SlashCommands.StatWatch);
             statWatchCommand.WithDescription("Sets an Old School RSN to monitor for stat changes.");
             statWatchCommand.AddOption("rsn", ApplicationCommandOptionType.String, "The name of the Old School Runescape account to monitor.", isRequired: true);
+
+            SlashCommandBuilder removeRSNCommand = new SlashCommandBuilder();
+            removeRSNCommand.WithName(SlashCommands.RemoveRSN);
+            removeRSNCommand.WithDescription("Removes a player's RSN from being tracked.");
+            removeRSNCommand.AddOption("rsn", ApplicationCommandOptionType.String, "The name of the Old School Runescape account to remove.", isRequired: true);
 
             SlashCommandBuilder getLastCheckTimeCommand = new SlashCommandBuilder();
             getLastCheckTimeCommand.WithName(SlashCommands.GetLastCheckTime);
@@ -44,11 +50,12 @@ namespace DagothUrDiscordBot.Commands
             setAsDefaultBotChatChannelCommand.WithName(SlashCommands.SetAsBotChannel);
             setAsDefaultBotChatChannelCommand.WithDescription("Sets this channel to receive the automatic player skill updates.");
 
-            slashCommandBuilders.Add(statWatchCommand);
-            slashCommandBuilders.Add(getLastCheckTimeCommand);
-            slashCommandBuilders.Add(fetchStatChangesCommand);
-            slashCommandBuilders.Add(getTrackedRSNsCommand);
-            slashCommandBuilders.Add(setAsDefaultBotChatChannelCommand);
+            slashCommandBuilders.Add(statWatchCommand.Build());
+            slashCommandBuilders.Add(removeRSNCommand.Build());
+            slashCommandBuilders.Add(getLastCheckTimeCommand.Build());
+            slashCommandBuilders.Add(fetchStatChangesCommand.Build());
+            slashCommandBuilders.Add(getTrackedRSNsCommand.Build());
+            slashCommandBuilders.Add(setAsDefaultBotChatChannelCommand.Build());
 
             DagothUr programInstance = DagothUr.GetInstance();
 
@@ -62,19 +69,12 @@ namespace DagothUrDiscordBot.Commands
 
                 Console.WriteLine($"Development environment. Registering slash commands to test guild Id {testGuildId}");
                 SocketGuild guild = client.GetGuild(Convert.ToUInt64(testGuildId));
-
-                foreach (var slashCommandBuilder in slashCommandBuilders)
-                {
-                    await guild.CreateApplicationCommandAsync(slashCommandBuilder.Build());
-                }
+                await guild.BulkOverwriteApplicationCommandAsync(slashCommandBuilders.ToArray());
             }
             else
             {
                 Console.WriteLine("Environment is production. Registering slash commands to be global.");
-                foreach (var slashCommandBuilder in slashCommandBuilders)
-                {
-                    await client.CreateGlobalApplicationCommandAsync(slashCommandBuilder.Build());
-                }
+                await client.BulkOverwriteGlobalApplicationCommandsAsync(slashCommandBuilders.ToArray());
             }
         }
 
@@ -143,7 +143,12 @@ namespace DagothUrDiscordBot.Commands
                 List<ChangedPlayer> playersWithChangedStats = await runStatCheckCommand.GetPlayersWithChangedSkills((ulong)guildId);
                 if (playersWithChangedStats.Count > 0)
                 {
-                    await command.FollowupAsync(changeTracker.FormatListOfChangedPlayersAsText(playersWithChangedStats));
+                    List<Embed> embeds = new();
+                    foreach(var changedPlayer in playersWithChangedStats)
+                    {
+                        embeds.Add(changedPlayer.GetDiscordEmbedRepresentingChanges());
+                    }
+                    await command.FollowupAsync(embeds: embeds.ToArray());
                 }
                 else
                 {
@@ -156,6 +161,54 @@ namespace DagothUrDiscordBot.Commands
                 var setAsBotChannelCommand = new SetAsBotChannelCommand();
                 setAsBotChannelCommand.RegisterChannelAsDefaultBotChannelForGuild((ulong)guildId, (ulong)command.ChannelId!);
                 await command.FollowupAsync("This channel will now be used for all automatic player updates.");
+            }
+            else if (commandName == SlashCommands.GetTrackedRsns)
+            {
+                await command.DeferAsync();
+                var getTrackedRSNsCommand = new GetTrackedRSNsCommand();
+                var listOfPlayerNames = getTrackedRSNsCommand.GetTrackedRSNsForGuild((ulong)guildId);
+                if (listOfPlayerNames.Count > 0)
+                {
+                    Embed embedOfPlayerNames = getTrackedRSNsCommand.GetEmbedOfTrackedPlayerrNames(listOfPlayerNames);
+                    await command.FollowupAsync(embed: embedOfPlayerNames);
+                }
+                else
+                {
+                    await command.FollowupAsync("There are no players being tracked in this server.");
+                }
+            }
+            else if (commandName == SlashCommands.GetLastCheckTime)
+            {
+                await command.DeferAsync();
+                var lastCheckTimeCommand = new GetLastCheckTimeCommand();
+                await command.FollowupAsync(embed: lastCheckTimeCommand.GetEmbedForLastCheckTimeAndNextCheckTime());
+            }
+            else if (commandName == SlashCommands.RemoveRSN)
+            {
+                await command.DeferAsync();
+                var rsnDataOption = command.Data.Options.Where(dataOption => dataOption.Name == "rsn").FirstOrDefault();
+                if (rsnDataOption == null)
+                {
+                    await command.FollowupAsync("Please provide an RSN.");
+                }
+                else
+                {
+                    string rsn = rsnDataOption.Value.ToString()!;
+                    var removeRSNCommandClass = new RemoveRSNCommand();
+                    bool didSucceed = removeRSNCommandClass.RemoveRSNFromGuildTracking(rsn, (ulong)guildId);
+                    if (didSucceed)
+                    {
+                        await command.FollowupAsync($"{rsn} has been removed from the tracking system.");
+                    }
+                    else
+                    {
+                        await command.FollowupAsync($"{rsn} was never tracked. Nothing has been removed.");
+                    }
+                }
+            }
+            else
+            {
+                await command.RespondAsync("No idea what that is.");
             }
         }
     }
