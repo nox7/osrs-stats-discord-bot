@@ -2,6 +2,7 @@
 using AngleSharp.Dom;
 using AngleSharp.Html.Dom;
 using AngleSharp.Html.Parser;
+using System.Diagnostics;
 
 namespace DagothUrDiscordBot.OldschoolHiscores
 {
@@ -69,6 +70,12 @@ namespace DagothUrDiscordBot.OldschoolHiscores
                 {
                     IHtmlCollection<IElement> tableColumns = tableRow.QuerySelectorAll("td");
 
+                    if (tableColumns.Count() == 0)
+                    {
+                        Debug.WriteLine("Out of table rows with columns. Must be the end of the skills list.");
+                        break;
+                    }
+
                     // Skip the first four <tr> - they're just title / headings
                     if (counter < 3)
                     {
@@ -89,12 +96,6 @@ namespace DagothUrDiscordBot.OldschoolHiscores
                         hiscorePlayer.SetTotalXP(totalXP);
                         counter++;
                         continue;
-                    }
-
-                    // No more skills after index 26 - it's minigame / boss items
-                    if (counter == 26)
-                    {
-                        break;
                     }
 
                     
