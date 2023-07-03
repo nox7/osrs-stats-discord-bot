@@ -1,8 +1,11 @@
-﻿using DagothUrDiscordBot.Models;
-using DagothUrDiscordBot.PlayerSkillMonitor;
-using DagothUrDiscordBot.StatFetcher;
+﻿using DagothUrDiscordBot.Commands;
+using DagothUrDiscordBot.Models;
+using DagothUrDiscordBot.OldschoolHiscores;
+using DagothUrDiscordBot.OldSchoolHiscores;
 using Discord;
+using Discord.Rest;
 using Discord.WebSocket;
+using Microsoft.EntityFrameworkCore;
 using System.Diagnostics;
 
 namespace DagothUrDiscordBot;
@@ -12,13 +15,9 @@ class DagothUr
     private static DagothUr? instance;
 
     private readonly DiscordSocketClient client;
-    private CommandManager.CommandManager commandManager;
-    private PlayerSynchronizer synchronizer;
-
-    // Store an array of GuildIDs and chat channel IDs
-    // These will be channels where the bot can chat unprompted messages, such as level-up messages
-    private Dictionary<ulong, ulong> guildDefaultChatChannels = new();
-    private Dictionary<ulong, string> guildGroupIronmanNames = new();
+    private CommandManager commandManager;
+    private string _runtimeEnvironment;
+    private System.Timers.Timer skillChangeCheckTimer;
 
     static void Main(String[] args)
     {
@@ -35,7 +34,25 @@ class DagothUr
 
     public DagothUr()
     {
-        synchronizer = new PlayerSynchronizer();
+
+        string? runtimeEnvironment = Environment.GetEnvironmentVariable("RUNNING_ENVIRONMENT");
+        if (runtimeEnvironment == null)
+        {
+            throw new Exception("Missing environment variable 'RUNNING_ENVIRONMENT' - Use a value of either 'Development' or 'Production'");
+        }
+
+        this._runtimeEnvironment = runtimeEnvironment;
+
+        // Run migrations in Production
+        if (this.IsProduction())
+        {
+            Console.WriteLine("Running database migrations.");
+            using (var dbContext = new OSRSStatBotDbContext())
+            {
+                dbContext.Database.Migrate();
+            }
+        }
+
         // Setup the privileges
         DiscordSocketConfig config = new DiscordSocketConfig
         {
@@ -47,46 +64,45 @@ class DagothUr
         client.Log += OnLog;
         client.Ready += OnReady;
 
-        commandManager = new CommandManager.CommandManager(client);
+        commandManager = new CommandManager(client);
     }
 
-    public void SetGuildGroupIronmanName(ulong guildID, string gimName)
+    /// <summary>
+    /// Either 'Development' or 'Production'
+    /// </summary>
+    /// <returns></returns>
+    public string GetRuntimeEnvironment()
     {
-        guildGroupIronmanNames[guildID] = gimName;
+        return this._runtimeEnvironment;
     }
 
-    public void SetGuildDefaultChatChannel(ulong guildID, ulong channelID)
+    public bool IsDevelopment()
     {
-        guildDefaultChatChannels[guildID] = channelID;
+        return this.GetRuntimeEnvironment().ToLower() == "development";
     }
 
-    public string? GetGuildGroupIronmanName(ulong guildID)
+    public bool IsProduction()
     {
-        string? gimName;
-        try
+        return this.GetRuntimeEnvironment().ToLower() == "production";
+    }
+
+    /// <summary>
+    /// Fetches the default chat channel ID a Discord server has set for the bot to use to post updates in
+    /// </summary>
+    /// <param name="guildId"></param>
+    /// <returns></returns>
+    public ulong? GetBotChatChannelForGuild(ulong guildId)
+    {
+        using (var dbContext = new OSRSStatBotDbContext())
         {
-            guildGroupIronmanNames.TryGetValue(guildID, out gimName);
-        }catch(ArgumentNullException)
-        {
-            return null;
+            GuildDefaultChatChannel? chatChannel = dbContext.GuildDefaultChatChannels.Where(channel => channel.GuildId == guildId).FirstOrDefault();
+            if (chatChannel != null)
+            {
+                return chatChannel.ChannelId;
+            }
         }
 
-        return gimName;
-    }
-
-    public ulong? GetGuildDefaultChatChannelID(ulong guildID)
-    {
-        ulong chatChannelID;
-        try
-        {
-            guildDefaultChatChannels.TryGetValue(guildID, out chatChannelID);
-        }
-        catch (ArgumentNullException)
-        {
-            return null;
-        }
-
-        return chatChannelID;
+        return null;
     }
 
     public async Task MainAsync()
@@ -100,92 +116,111 @@ class DagothUr
         // Setup a timer to recurringly check for player skill gains
         System.Timers.Timer playerSkillChangesTimer = new()
         {
-            Interval = 3600 * 1000,
-            AutoReset = true,
+            //Interval = 60000 * 10, // Every 10 minutes
+            Interval = 10000, // Every 10 seconds
+            AutoReset = false,
             Enabled = true
         };
 
         playerSkillChangesTimer.Elapsed += OnPlayerSkillCheckTimedEvent;
+        skillChangeCheckTimer = playerSkillChangesTimer;
 
         // Block the program from closing until it is closed manually
         await Task.Delay(Timeout.Infinite);
     }
 
-    public PlayerSynchronizer GetPlayerSynchronizer()
-    {
-        return this.synchronizer;
-    }
-
     private async void OnPlayerSkillCheckTimedEvent(Object? source, System.Timers.ElapsedEventArgs e)
     {
-        Console.WriteLine("Timer elapsed.");
-        foreach (ulong guildID in this.guildGroupIronmanNames.Keys)
-        {
-            var guild = this.client.GetGuild(guildID);
-            if (guild != null)
-            {
-                string gimName = this.guildGroupIronmanNames[guildID];
-                ulong? chatChannelID = this.GetGuildDefaultChatChannelID(guildID);
-                if (chatChannelID != null && chatChannelID != 0)
-                {
-                    var channel = guild.GetTextChannel(chatChannelID ?? 0);
-                    if (channel != null)
-                    {
-                        string finalMessageToSend = ""; 
-                        List<HighscoresPlayer> hsPlayers = await synchronizer.GetGIMHighscorePlayers(gimName);
-                        foreach (HighscoresPlayer hsPlayer in hsPlayers)
-                        {
-                            List<ChangedSkill> changedSkills = synchronizer.GetPlayerChangedSkills(hsPlayer);
-                            if (changedSkills.Count > 0)
-                            {
-                                finalMessageToSend += $"=== {hsPlayer.GetName()} Gains ===\n";
-                                foreach(ChangedSkill s in changedSkills)
-                                {
-                                    if (s.DeltaLevel == 1)
-                                    {
-                                        finalMessageToSend += $"{s.Name.Trim()} increased by {s.DeltaLevel} level to {s.NewLevel}\n";
-                                    }
-                                    else
-                                    {
-                                        finalMessageToSend += $"{s.Name.Trim()} increased by {s.DeltaLevel} levels to {s.NewLevel}\n";
-                                    }
-                                    
-                                }
+        Console.WriteLine("Skill check timer ticked.");
+        var changeTracker = new ChangeTracker();
+        var statFetcher = new StatFetcher();
 
-                                Player player = synchronizer.GetPlayerFromDatabase(hsPlayer)!;
-                                synchronizer.UpdatePlayerSkillsInDatabase(player.Id, hsPlayer);
-                                finalMessageToSend += "\n";
-                            }
-                            else
+        // Fetch all servers that have given a default chat channel
+        using (var dbContext = new OSRSStatBotDbContext())
+        {
+            // Handle 100 players at a time to avoid server strain on both our DB and Jagex's
+            int currentPage = 1;
+            int limit = 100;
+
+            while(true)
+            {
+                List<Player> trackedPlayers = dbContext.Players.Skip((currentPage - 1) * limit).Take(limit).ToList();
+                Console.WriteLine(trackedPlayers.Count);
+
+                if (trackedPlayers.Count == 0)
+                {
+                    Console.WriteLine($"Done reading tracked players in timer on page {currentPage}");
+                    // Break when the list is empty
+                    break;
+                }
+
+                // Lookup live stats
+                foreach(Player dbPlayer in trackedPlayers)
+                {
+                    HiscoresPlayer? hsPlayer = await statFetcher.GetHiscoresPlayerFromRSN(dbPlayer.PlayerName);
+                    if (hsPlayer != null)
+                    {
+                        List<ChangedSkill> changedSkills = dbPlayer.GetAnyChangedSkillsComparedToList(hsPlayer.GetSkillList());
+                        if (changedSkills.Count > 0)
+                        {
+                            Debug.WriteLine($"{dbPlayer.PlayerName} has skill changes.");
+                            // Has changed skills
+                            dbContext.Attach(dbPlayer);
+                            dbPlayer.LastDataFetchTimestamp = (int) DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                            dbPlayer.TotalLevel = hsPlayer.GetTotalLevel();
+                            dbPlayer.TotalXP = hsPlayer.GetTotalXP();
+
+                            var changedPlayer = new ChangedPlayer();
+                            changedPlayer.player = dbPlayer;
+                            changedPlayer.changedSkills = changedSkills;
+
+                            string textForGuild = changeTracker.FormatListOfChangedPlayersAsText(new List<ChangedPlayer> { changedPlayer });
+
+                            // Update their stats in the DB
+                            dbPlayer.UpdateSkills(hsPlayer.GetSkillList());
+
+                            // Fetch the guild ID for this player
+                            List<ulong> guildIDsPlayerIsMonitoredBy = PlayerGuildLink.GetAllGuildIdsPlayerIsMonitoredBy(dbPlayer.Id);
+
+                            foreach(ulong guildId in guildIDsPlayerIsMonitoredBy)
                             {
-                                Console.WriteLine($"{hsPlayer.GetName()} made no gains.");
-                                // finalMessageToSend += $"== ${hsPlayer.GetName()} has not made any gains. ==\n";
+                                SocketGuild guild = client.GetGuild(guildId);
+                                Debug.WriteLine($"Found guild {guildId} for player {dbPlayer.PlayerName}.");
+
+                                // Did they set a bot text channel?
+                                ulong? channelId = GetBotChatChannelForGuild(guildId);
+                                if (channelId != null)
+                                {
+                                    SocketTextChannel textChannel = guild.GetTextChannel((ulong)channelId);
+                                    RestUserMessage responseMessage = await textChannel.SendMessageAsync(textForGuild);
+                                    Debug.WriteLine($"Message sent for {guildId} and {channelId}.");
+                                }
+                                else
+                                {
+                                    Console.WriteLine($"Guild {guildId} did not set a default bot channel to post about {dbPlayer.PlayerName}'s skill updates.");
+                                }
                             }
                         }
-
-                        if (!string.IsNullOrEmpty(finalMessageToSend))
+                        else
                         {
-                            await channel.SendMessageAsync(finalMessageToSend);
+                            Debug.WriteLine($"{dbPlayer.PlayerName} has no skill changes to post about.");
                         }
                     }
                     else
                     {
-                        Console.WriteLine($"No channel in guild {guildID} with channel ID {chatChannelID}. This guild should probably rerun the set-default-chat-channel command.");
+                        // TODO Handle failures with DB counter and remove from the DB if the counter has 3 failures
+                        Console.WriteLine($"Error looking up {dbPlayer.PlayerName} - did their RSN change?");
                     }
                 }
-                else
-                {
-                    Console.WriteLine($"Cannot check stats for GIM {gimName}. No default chat channel set!");
-                }
+
+                dbContext.SaveChanges();
+                ++currentPage;
             }
-            else
-            {
-                Console.WriteLine($"Could not find a guild with ID {guildID}");
-            }
-            
-            
+
         }
-       
+
+        // After all done, start the timer again
+        skillChangeCheckTimer.Start();
     }
 
     private Task OnLog(LogMessage log)
