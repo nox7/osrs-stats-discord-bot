@@ -4,7 +4,7 @@
     {
         private string name;
         private int totalLevel;
-        private int totalXP;
+        private long totalXP;
         private List<HiscoresPlayerSkill> skillList = new();
 
         public HiscoresPlayer(string name)
@@ -22,7 +22,7 @@
             this.totalLevel = totalLevel;
         }
 
-        public void SetTotalXP(int totalXP)
+        public void SetTotalXP(long totalXP)
         {
             this.totalXP = totalXP;
         }
@@ -32,7 +32,7 @@
             return this.totalLevel;
         }
 
-        public int GetTotalXP()
+        public long GetTotalXP()
         {
             return this.totalXP;
         }

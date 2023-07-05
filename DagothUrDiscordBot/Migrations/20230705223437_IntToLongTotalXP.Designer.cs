@@ -2,6 +2,7 @@
 using DagothUrDiscordBot;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -9,9 +10,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace DagothUrDiscordBot.Migrations
 {
     [DbContext(typeof(OSRSStatBotDbContext))]
-    partial class OSRSStatBotDbContextModelSnapshot : ModelSnapshot
+    [Migration("20230705223437_IntToLongTotalXP")]
+    partial class IntToLongTotalXP
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

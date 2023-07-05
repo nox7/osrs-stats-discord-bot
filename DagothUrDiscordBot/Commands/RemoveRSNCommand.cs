@@ -35,6 +35,10 @@ namespace DagothUrDiscordBot.Commands
 
                         return true;
                     }
+                    else
+                    {
+                        Debug.WriteLine($"No link from that player {rsn} to the current guild {guildId} was found. Nothing to remove.");
+                    }
                 }
                 else
                 {

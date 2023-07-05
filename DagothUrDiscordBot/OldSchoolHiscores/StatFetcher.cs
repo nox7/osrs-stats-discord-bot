@@ -91,7 +91,7 @@ namespace DagothUrDiscordBot.OldschoolHiscores
                         IElement? totalLevelCell = tableColumns.GetItemByIndex(3);
                         IElement? totalXPCell = tableColumns.GetItemByIndex(4);
                         int totalLevel = Int32.Parse(totalLevelCell.TextContent.Trim().Replace(",", ""));
-                        int totalXP = Int32.Parse(totalXPCell.TextContent.Trim().Replace(",", ""));
+                        long totalXP = Int64.Parse(totalXPCell.TextContent.Trim().Replace(",", ""));
                         hiscorePlayer.SetTotalLevel(totalLevel);
                         hiscorePlayer.SetTotalXP(totalXP);
                         counter++;
