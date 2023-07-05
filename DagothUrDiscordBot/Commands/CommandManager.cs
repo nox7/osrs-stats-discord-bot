@@ -128,7 +128,7 @@ namespace DagothUrDiscordBot.Commands
                         {
                             // Not null, store their stats
                             player!.UpdateSkills(hsPlayer.GetSkillList());
-                            Debug.WriteLine("Player skills successfully added tot he local database to be tracked.");
+                            Debug.WriteLine("Player skills successfully added to the local database to be tracked.");
                             await command.FollowupAsync($"{rsn} successfully added to be tracked.");
                         }
                     }
